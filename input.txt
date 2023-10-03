@@ -1,0 +1,4 @@
+test1.txt=b38025ad
+test2.txt=87654321
+kernel version=5.15.0-84-generic
+kernel module:kernel/drivers/net/rionet.ko=88bc80a8
