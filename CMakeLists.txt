@@ -1,12 +1,17 @@
-cmake_minimum_required(VERSION 3.19.5)
-project(modem_host)
+cmake_minimum_required(VERSION 3.10)
+project(VersionChecker)
 
-set(CMAKE_CXX_STANDARD 20)
+# Set C++ standard to C++11
+set(CMAKE_CXX_STANDARD 11)
 
-set(SOURCES
-    Logic.cpp
-    CellularManager.cpp
-    main.cpp 
-)
+# Set compiler flags
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Og -g")
 
-add_executable(modem_managed ${SOURCES})
+# Set source files
+set(SOURCE_FILES main.cpp)
+
+# Add the executable
+add_executable(version_check.bin ${SOURCE_FILES})
+
+# Link against required libraries
+target_link_libraries(version_check.bin xxhash pthread)

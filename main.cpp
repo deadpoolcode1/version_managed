@@ -46,7 +46,7 @@ int main()
     std::string line, filepath, hash;
 
     // Read the input file with the format <filepath>=<xh32sum>
-    std::ifstream inputFile("input.txt");
+    std::ifstream inputFile("/etc/version_list.conf");
     while (std::getline(inputFile, line))
     {
         std::stringstream ss(line);
