@@ -7,10 +7,11 @@
 #include <xxhash.h>
 #include <sys/utsname.h>
 #include <cstring>
-#include <future>
 #include <algorithm>
 #include <cctype>
-#include <set> 
+#include <set>
+#include <cstdlib> // Include this for system()
+#include <cstdio>  // Include this for popen()
 
 std::string compute_xxh32sum(const std::string &filepath)
 {
@@ -37,50 +38,48 @@ std::string compute_xxh32sum(const std::string &filepath)
 
 std::string getKernelModuleVersion(const std::string &modulePath)
 {
-    std::array<char, 128> buffer;
-    std::string result;
     std::string cmd = "/sbin/modinfo -F vermagic " + modulePath + " 2>/dev/null";
-
-    std::cerr << "DEBUG: cmd = " << cmd << std::endl; // Added this line for debugging
-    
-    FILE* pipe = popen(cmd.c_str(), "r");
+    FILE *pipe = popen(cmd.c_str(), "r");
     if (!pipe)
     {
         std::cerr << "Failed to run modinfo command." << std::endl;
         return "";
     }
-    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+
+    char buffer[128];
+    std::string result = "";
+
+    while (!feof(pipe))
     {
-        result += buffer.data();
+        if (fgets(buffer, 128, pipe) != nullptr)
+            result += buffer;
     }
+
     pclose(pipe);
-    
-    std::cerr << "DEBUG: result = " << result << std::endl; // Added this line for debugging
-    
-    // Parsing the version from the vermagic output
-    std::stringstream ss(result);
-    result = result.substr(0, result.find(' '));  // Trimming based on space
+
+    // Parsing the version from the modinfo output
     size_t spacePos = result.find(' ');
-    if (spacePos != std::string::npos) {
+    if (spacePos != std::string::npos)
+    {
         result = result.substr(0, spacePos);
     }
-    result.erase(std::remove(result.begin(), result.end(), '\n'), result.end());  // Removing newline
+    result.erase(std::remove(result.begin(), result.end(), '\n'), result.end());
 
-    
     return result;
 }
 
-
-std::string getKernelModuleBasePath() {
+std::string getKernelModuleBasePath()
+{
     struct utsname buf;
-    if (uname(&buf) == -1) {
+    if (uname(&buf) == -1)
+    {
         std::cerr << "Failed to fetch kernel version." << std::endl;
         return "";
     }
     return std::string("/lib/modules/") + buf.release + "/";
 }
 
-std::string trim(const std::string& str)
+std::string trim(const std::string &str)
 {
     auto start = std::find_if_not(str.begin(), str.end(), ::isspace);
     auto end = std::find_if_not(str.rbegin(), str.rend(), ::isspace).base();
@@ -91,7 +90,7 @@ int main()
 {
     std::string line, filepath, hash;
     std::map<std::string, std::string> fileMap;
-    std::set<std::string> checkedModules;  // This set keeps track of checked modules
+    std::set<std::string> checkedModules; // This set keeps track of checked modules
     std::vector<std::string> deviatingFiles;
 
     // Read the input file with the format <filepath>=<xh32sum>
@@ -111,18 +110,25 @@ int main()
     }
     inputFile.close();
 
-    for (const auto &pair : fileMap) {
+    for (const auto &pair : fileMap)
+    {
         std::string computedHash;
 
-        if (pair.first == "kernel version") {
+        if (pair.first == "kernel version")
+        {
             struct utsname buf;
-            if (uname(&buf) != -1) {
+            if (uname(&buf) != -1)
+            {
                 computedHash = buf.release; // 'release' contains the kernel version
-            } else {
-                std::cerr << "Failed to fetch kernel version." << std::endl;
-                continue; // skip to next iteration
             }
-        } else if (pair.first.rfind("kernel module:", 0) == 0) {
+            else
+            {
+                std::cerr << "Failed to fetch kernel version." << std::endl;
+                continue; // skip to the next iteration
+            }
+        }
+        else if (pair.first.rfind("kernel module:", 0) == 0)
+        {
             std::string moduleName = pair.first.substr(strlen("kernel module:"));
             std::string modulePath = getKernelModuleBasePath() + moduleName;
 
@@ -130,26 +136,31 @@ int main()
             versionFromModinfo = trim(versionFromModinfo);
             std::string trimmedExpected = trim(pair.second);
 
-            if (versionFromModinfo != trimmedExpected) {
+            if (versionFromModinfo != trimmedExpected)
+            {
                 deviatingFiles.push_back(pair.first + " (Expected: " + trimmedExpected + ", Actual: " + versionFromModinfo + ")");
             }
 
-            checkedModules.insert(pair.first);  // Mark this module as checked
-
-        } else {
+            checkedModules.insert(pair.first); // Mark this module as checked
+        }
+        else
+        {
             computedHash = compute_xxh32sum(pair.first);
         }
 
-        if (checkedModules.find(pair.first) == checkedModules.end() && computedHash != pair.second) {
+        if (checkedModules.find(pair.first) == checkedModules.end() && computedHash != pair.second)
+        {
             deviatingFiles.push_back(pair.first + " (Expected: " + pair.second + ", Actual: " + computedHash + ")");
         }
     }
 
     // Output the deviating files in JSON format
     std::cout << "[";
-    for (size_t i = 0; i < deviatingFiles.size(); ++i) {
+    for (size_t i = 0; i < deviatingFiles.size(); ++i)
+    {
         std::cout << "\"" << deviatingFiles[i] << "\"";
-        if (i < deviatingFiles.size() - 1) { // if not the last element
+        if (i < deviatingFiles.size() - 1)
+        { // if not the last element
             std::cout << ", ";
         }
     }
