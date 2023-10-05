@@ -31,6 +31,25 @@ std::string compute_xxh32sum(const std::string &filepath)
     return ss.str();
 }
 
+std::string getKernelModuleVersion(const std::string &modulePath)
+{
+    std::array<char, 128> buffer;
+    std::string result;
+    std::string cmd = "/sbin/modinfo -F version " + modulePath + " 2>/dev/null";
+    FILE* pipe = popen(cmd.c_str(), "r");
+    if (!pipe)
+    {
+        std::cerr << "Failed to run modinfo command." << std::endl;
+        exit(EXIT_FAILURE);
+    }
+    while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
+    {
+        result += buffer.data();
+    }
+    pclose(pipe);
+    return result.substr(0, result.size() - 1);  // To remove the trailing newline
+}
+
 std::string getKernelModulePath() {
     struct utsname buf;
     if (uname(&buf) == -1) {
@@ -70,11 +89,11 @@ int main()
                 std::cerr << "Failed to fetch kernel version." << std::endl;
                 exit(EXIT_FAILURE);
             }
-        } else if (pair.first.rfind("kernel module:", 0) == 0) {
+        }         else if (pair.first.rfind("kernel module:", 0) == 0) {
             std::string moduleName = pair.first.substr(strlen("kernel module:"));
             std::string modulePath = getKernelModulePath() + moduleName;
-            computedHash = compute_xxh32sum(modulePath);
-        } else {
+            computedHash = getKernelModuleVersion(modulePath);
+        }  else {
             computedHash = compute_xxh32sum(pair.first);
         }
 
