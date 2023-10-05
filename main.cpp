@@ -15,7 +15,7 @@ std::string compute_xxh32sum(const std::string &filepath)
     if (!file.is_open())
     {
         std::cerr << "Failed to open file: " << filepath << std::endl;
-        exit(EXIT_FAILURE);
+        return "";
     }
 
     std::vector<char> fileData((std::istreambuf_iterator<char>(file)),
@@ -35,26 +35,32 @@ std::string getKernelModuleVersion(const std::string &modulePath)
 {
     std::array<char, 128> buffer;
     std::string result;
-    std::string cmd = "/sbin/modinfo -F version " + modulePath + " 2>/dev/null";
+    std::string cmd = "/sbin/modinfo -F vermagic " + modulePath + " 2>/dev/null";
+    
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe)
     {
         std::cerr << "Failed to run modinfo command." << std::endl;
-        exit(EXIT_FAILURE);
+        return "";
     }
     while (fgets(buffer.data(), buffer.size(), pipe) != nullptr)
     {
         result += buffer.data();
     }
     pclose(pipe);
-    return result.substr(0, result.size() - 1);  // To remove the trailing newline
+    
+    // Parsing the version from the vermagic output
+    std::stringstream ss(result);
+    std::getline(ss, result, ' '); // We only need the first part which is the version
+    
+    return result;
 }
 
-std::string getKernelModulePath() {
+std::string getKernelModuleBasePath() {
     struct utsname buf;
     if (uname(&buf) == -1) {
         std::cerr << "Failed to fetch kernel version." << std::endl;
-        exit(EXIT_FAILURE);
+        return "";
     }
     return std::string("/lib/modules/") + buf.release + "/";
 }
@@ -87,18 +93,18 @@ int main()
                 computedHash = buf.release; // 'release' contains the kernel version
             } else {
                 std::cerr << "Failed to fetch kernel version." << std::endl;
-                exit(EXIT_FAILURE);
+                continue; // skip to next iteration
             }
-        }         else if (pair.first.rfind("kernel module:", 0) == 0) {
+        } else if (pair.first.rfind("kernel module:", 0) == 0) {
             std::string moduleName = pair.first.substr(strlen("kernel module:"));
-            std::string modulePath = getKernelModulePath() + moduleName;
+            std::string modulePath = getKernelModuleBasePath() + moduleName;
             computedHash = getKernelModuleVersion(modulePath);
-        }  else {
+        } else {
             computedHash = compute_xxh32sum(pair.first);
         }
 
         if (computedHash != pair.second) {
-            deviatingFiles.push_back(pair.first);
+            deviatingFiles.push_back(pair.first + " (Expected: " + pair.second + ", Actual: " + computedHash + ")");
         }
     }
 
