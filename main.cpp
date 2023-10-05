@@ -7,6 +7,10 @@
 #include <xxhash.h>
 #include <sys/utsname.h>
 #include <cstring>
+#include <future>
+#include <algorithm>
+#include <cctype>
+#include <set> 
 
 std::string compute_xxh32sum(const std::string &filepath)
 {
@@ -36,6 +40,8 @@ std::string getKernelModuleVersion(const std::string &modulePath)
     std::array<char, 128> buffer;
     std::string result;
     std::string cmd = "/sbin/modinfo -F vermagic " + modulePath + " 2>/dev/null";
+
+    std::cerr << "DEBUG: cmd = " << cmd << std::endl; // Added this line for debugging
     
     FILE* pipe = popen(cmd.c_str(), "r");
     if (!pipe)
@@ -49,12 +55,21 @@ std::string getKernelModuleVersion(const std::string &modulePath)
     }
     pclose(pipe);
     
+    std::cerr << "DEBUG: result = " << result << std::endl; // Added this line for debugging
+    
     // Parsing the version from the vermagic output
     std::stringstream ss(result);
-    std::getline(ss, result, ' '); // We only need the first part which is the version
+    result = result.substr(0, result.find(' '));  // Trimming based on space
+    size_t spacePos = result.find(' ');
+    if (spacePos != std::string::npos) {
+        result = result.substr(0, spacePos);
+    }
+    result.erase(std::remove(result.begin(), result.end(), '\n'), result.end());  // Removing newline
+
     
     return result;
 }
+
 
 std::string getKernelModuleBasePath() {
     struct utsname buf;
@@ -65,13 +80,28 @@ std::string getKernelModuleBasePath() {
     return std::string("/lib/modules/") + buf.release + "/";
 }
 
+std::string trim(const std::string& str)
+{
+    auto start = std::find_if_not(str.begin(), str.end(), ::isspace);
+    auto end = std::find_if_not(str.rbegin(), str.rend(), ::isspace).base();
+    return (end <= start ? std::string() : std::string(start, end));
+}
+
 int main()
 {
-    std::map<std::string, std::string> fileMap;
     std::string line, filepath, hash;
+    std::map<std::string, std::string> fileMap;
+    std::set<std::string> checkedModules;  // This set keeps track of checked modules
+    std::vector<std::string> deviatingFiles;
 
     // Read the input file with the format <filepath>=<xh32sum>
     std::ifstream inputFile("/etc/version_list.conf");
+    if (!inputFile.is_open())
+    {
+        std::cerr << "Failed to open /etc/version_list.conf" << std::endl;
+        return 1;
+    }
+
     while (std::getline(inputFile, line))
     {
         std::stringstream ss(line);
@@ -81,9 +111,6 @@ int main()
     }
     inputFile.close();
 
-    std::vector<std::string> deviatingFiles;
-
-    // Check xxh32sum for each file and compare
     for (const auto &pair : fileMap) {
         std::string computedHash;
 
@@ -98,12 +125,22 @@ int main()
         } else if (pair.first.rfind("kernel module:", 0) == 0) {
             std::string moduleName = pair.first.substr(strlen("kernel module:"));
             std::string modulePath = getKernelModuleBasePath() + moduleName;
-            computedHash = getKernelModuleVersion(modulePath);
+
+            std::string versionFromModinfo = getKernelModuleVersion(modulePath);
+            versionFromModinfo = trim(versionFromModinfo);
+            std::string trimmedExpected = trim(pair.second);
+
+            if (versionFromModinfo != trimmedExpected) {
+                deviatingFiles.push_back(pair.first + " (Expected: " + trimmedExpected + ", Actual: " + versionFromModinfo + ")");
+            }
+
+            checkedModules.insert(pair.first);  // Mark this module as checked
+
         } else {
             computedHash = compute_xxh32sum(pair.first);
         }
 
-        if (computedHash != pair.second) {
+        if (checkedModules.find(pair.first) == checkedModules.end() && computedHash != pair.second) {
             deviatingFiles.push_back(pair.first + " (Expected: " + pair.second + ", Actual: " + computedHash + ")");
         }
     }
