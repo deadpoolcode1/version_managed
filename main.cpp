@@ -94,10 +94,10 @@ int main()
     std::vector<std::string> deviatingFiles;
 
     // Read the input file with the format <filepath>=<xh32sum>
-    std::ifstream inputFile("/etc/version_list.conf");
+    std::ifstream inputFile("/etc/release_list.conf");
     if (!inputFile.is_open())
     {
-        std::cerr << "Failed to open /etc/version_list.conf" << std::endl;
+        std::cerr << "Failed to open /etc/release_list.conf" << std::endl;
         return 1;
     }
 
