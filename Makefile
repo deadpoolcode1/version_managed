@@ -1,5 +1,5 @@
 # Output binary
-OUTPUT ?= version_check.bin
+OUTPUT ?= release_check.bin
 
 # Compiler
 CXX ?= /usr/bin/g++

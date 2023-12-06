@@ -11,7 +11,7 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Og -g")
 set(SOURCE_FILES main.cpp)
 
 # Add the executable
-add_executable(version_check.bin ${SOURCE_FILES})
+add_executable(release_check.bin ${SOURCE_FILES})
 
 # Link against required libraries
-target_link_libraries(version_check.bin xxhash pthread)
+target_link_libraries(release_check.bin xxhash pthread)
